@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>User Profile</title>
+    <style>
+      * {
+        margin: 0;
+      }
+
+      /* Body styling */
+      body {
+        background-color: #f5f5f5;
+        margin: 0;
+        font-family: Arial, sans-serif;
+      }
+      /* Container styling */
+      .container {
+        margin: 20px auto;
+        max-width: 800px;
+      }
+
+      /* Card styling */
+      .card {
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
+        padding: 20px;
+      }
+
+      /* Card header styling */
+      .card-header {
+        text-align: center;
+        font-weight: bold;
+        font-size: 1.5rem;
+        margin-bottom: 10px;
+      }
+
+      /* Sign Out button styling */
+      .signout-btn {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+        padding: 5px 15px;
+        background-color: #f44336;
+        color: #fff;
+        border: none;
+        border-radius: 5px;
+        font-size: 14px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+
+      .signout-btn:hover {
+        background-color: #d32f2f;
+        transition: all 0.2s ease;
+      }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/jwt-decode/build/jwt-decode.min.js"></script>
+  </head>
+  <body>
+    <!-- Header section -->
+    <div id="header-container"></div>
+    <script>
+      fetch("header.html")
+        .then((response) => response.text())
+        .then((data) => {
+          document.getElementById("header-container").innerHTML = data;
+        })
+        .catch((error) => console.error("Error loading header:", error));
+    </script>
+
+    <!-- Main content container -->
+    <div class="container">
+      <!-- User Information Card -->
+      <div class="card">
+        <div class="card-header">User Information</div>
+        <div class="card-body" id="userInfo"></div>
+      </div>
+
+      <!-- Workout Plans Card -->
+      <div class="card">
+        <div class="card-header">Workout Plans</div>
+        <div class="card-body">
+          <ul id="workoutPlans"></ul>
+        </div>
+      </div>
+
+      <!-- Your Goals Card -->
+      <div class="card">
+        <div class="card-header">Your Goals</div>
+        <div class="card-body">
+          <ul id="goalList"></ul>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      async function fetchUserProfile() {
+        try {
+          const token = localStorage.getItem("token");
+          if (!token) {
+            alert("Token not found. Please log in again.");
+            window.location.href = "register.html";
+            return;
+          }
+
+          const decoded = jwt_decode(token);
+          const userId = decoded.id;
+
+          // Fetch user profile data
+          const response = await fetch(
+            `http://localhost:3000/api/profile/${userId}`,
+            {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+
+          if (response.ok) {
+            const user = await response.json();
+
+            document.getElementById("userInfo").innerHTML = `
+              <p><strong>Full Name:</strong> ${user.name}</p>
+              <p><strong>Email:</strong> ${user.email}</p>
+            `;
+
+            // Fetch Workout Plans and Goals
+            fetchWorkoutPlans(userId, token);
+            fetchGoals(userId, token);
+          } else {
+            const errorData = await response.json();
+            alert(`Error: ${errorData.message}`);
+          }
+        } catch (error) {
+          console.error("Error fetching user profile:", error);
+        }
+      }
+
+      async function fetchWorkoutPlans(userId, token) {
+        try {
+          const response = await fetch(
+            `http://localhost:3000/api/workout-plans/${userId}`,
+            {
+              method: "GET",
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+
+          if (response.ok) {
+            const workoutPlans = await response.json();
+            const workoutContainer = document.getElementById("workoutPlans");
+
+            workoutContainer.innerHTML = workoutPlans
+              .map(
+                (plan) => `
+                <li>
+                  <h4 style="color: #002855;">${plan.name}</h4>
+                  <ul>
+                    ${plan.exercises
+                      .map(
+                        (exercise) => `
+                      <li>
+                        <strong>${exercise.exerciseName}:</strong>
+                        Sets: ${exercise.sets}, Reps: ${exercise.reps}, Weight: ${exercise.weight}lbs
+                      </li>
+                    `
+                      )
+                      .join("")}
+                  </ul>
+                </li>`
+              )
+              .join("");
+          }
+        } catch (error) {
+          console.error("Error fetching workout plans:", error);
+        }
+      }
+
+      async function fetchGoals(userId, token) {
+        try {
+          const response = await fetch(
+            `http://localhost:3000/api/goal-tracking/user/${userId}/goals`,
+            {
+              method: "GET",
+              headers: { Authorization: `Bearer ${token}` },
+            }
+          );
+
+          if (response.ok) {
+            const goals = await response.json();
+            const goalContainer = document.getElementById("goalList");
+
+            if (goals.length === 0) {
+              goalContainer.innerHTML = "<li>No goals found.</li>";
+              return;
+            }
+
+            goalContainer.innerHTML = goals
+              .map(
+                (goal) => `
+                <li>
+                  <h4 style="color: #002855;">${goal.goalType
+                    .replace("_", " ")
+                    .toUpperCase()}</h4>
+                  <div>Target Value: ${goal.targetValue}</div>
+                  <div>Status: ${goal.status.replace("_", " ")}</div>
+                  <div>Start Date: ${
+                    new Date(goal.startDate).toISOString().split("T")[0]
+                  }</div>
+                </li>`
+              )
+              .join("");
+          } else {
+            console.error("Failed to fetch goals");
+          }
+        } catch (error) {
+          console.error("Error fetching goals:", error);
+        }
+      }
+
+      fetchUserProfile();
+    </script>
+  </body>
+</html>
